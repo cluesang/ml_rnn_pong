@@ -2,7 +2,8 @@ import gym
 import sys
 import os
 import numpy as np
-import csv
+from json import JSONEncoder
+import json
 
 ################ Image Preprocessing  ###################
 
@@ -109,30 +110,33 @@ def discount_plus_rewards(gradient_log_p, episode_rewards, gamma):
     discounted_episode_rewards /= np.std(discounted_episode_rewards)
     return gradient_log_p * discounted_episode_rewards
 
+class NumpyArrayEncoder(JSONEncoder):
+    def default(self, obj):
+        if isinstance(obj, np.ndarray):
+            return obj.tolist()
+        return JSONEncoder.default(self, obj)
+
 def openOrCreateWeights(num_hidden_layer_neurons, input_dimensions):
     weights = {
         '1': np.random.randn(num_hidden_layer_neurons, input_dimensions) / np.sqrt(input_dimensions),
         '2': np.random.randn(num_hidden_layer_neurons) / np.sqrt(num_hidden_layer_neurons)
     }
     try:
-        with open('weights.csv','w', newline='') as csvfile:
-            reader = csv.DictReader(csvfile,fieldnames=['1', '2'])
-            for row in reader:
-                weights['1'] = row['1']
-                weights['2'] = row['2']
-                print(row['1'], row['2'])
+        jsonFile = open('weights.json', 'r')
+        weightsJSONSerialized = jsonFile.read()
+        weights = json.loads(weightsJSONSerialized)
+        weights['1'] = np.asarray(weights['1'])
+        weights['2'] = np.asarray(weights['2'])
     except:
         saveWeights(weights)
     
     return weights
        
 def saveWeights(weights):
-    with open('weights.csv','w', newline='') as csvfile:
-        fieldnames = ['1', '2']
-        writer = csv.DictWriter(csvfile, fieldnames=fieldnames)
-
-        writer.writeheader()
-        writer.writerow(weights)
+    weightsJSONSerialized = json.dumps(weights, cls=NumpyArrayEncoder)
+    jsonFile = open('weights.json','w')
+    jsonFile.write(weightsJSONSerialized)
+    jsonFile.close()
     return True
 
 #################### The game  ##########################
@@ -169,7 +173,8 @@ def main():
 
 
     while True:
-        env.render(mode='rgb_array')
+        # env.render(mode='rgb_array')
+        env.render()
         processed_observations, prev_processed_observations = preprocess_observations(observation, prev_processed_observations, input_dimensions)
         hidden_layer_values, up_probability = neural_net(processed_observations, weights)
     
