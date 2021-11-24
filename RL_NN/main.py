@@ -176,7 +176,7 @@ def main(silent=False,sessionId=None):
     env = gym.make("Pong-v0")
     observation = env.reset() # This gets us the image
 
-    timestamp = datetime.now().strftime("%Y_%m_%d-%I_%M_%S_%p")
+    timestamp = datetime.now().strftime("%Y_%m_%d-%I_%M:%S:%p")
 
     isResumingSession = (sessionId != None)
     if(not isResumingSession):
