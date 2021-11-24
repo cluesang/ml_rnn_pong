@@ -5,6 +5,8 @@ import numpy as np
 from json import JSONEncoder
 import json
 from datetime import datetime
+import time
+import csv
 
 ################ Image Preprocessing  ###################
 
@@ -138,56 +140,96 @@ def saveWeights(weights, filename):
     return True
 
 def saveEpisodeHistory(episodeData, filename):
-    JSONSerialized = json.dumps(episodeData, cls=NumpyArrayEncoder)
-    jsonFile = open(filename,'a')
+
+    headers = ['episode_number', 'reward_sum', 'running_reward']
+    entryData = [episodeData['episode_number']
+                ,episodeData['reward_sum']
+                ,episodeData['running_reward']]
+    firstRun = False
+    if (not os.path.exists(filename)):
+            firstRun = True
+    file = open(filename, 'a')
+    writer = csv.writer(file)
+    if (firstRun):
+        writer.writerow(headers)
+    writer.writerow(entryData)
+    file.close()
+    return True
+
+def saveTrainingConfig(config,filename):
+    JSONSerialized = json.dumps(config, cls=NumpyArrayEncoder)
+    jsonFile = open(filename,'w')
     jsonFile.write(JSONSerialized+"\n")
     jsonFile.close()
     return True
 
-def saveTrainingConfig(config,timestamp):
-    JSONSerialized = json.dumps(config, cls=NumpyArrayEncoder)
-    jsonFile = open("trainingConfig_"+timestamp+".json",'a')
-    jsonFile.write(JSONSerialized+"\n")
+def openTrainingConfig(filename):
+    jsonFile = open(filename, 'r')
+    configJSONSerialized = jsonFile.read()
+    config = json.loads(configJSONSerialized)
     jsonFile.close()
-    return True
+    config['prev_processed_observations'] = np.asarray(config['prev_processed_observations'])
+    return config
 
 #################### The game  ##########################
-def main(silent=False):
+def main(silent=False,sessionId=None):
     env = gym.make("Pong-v0")
     observation = env.reset() # This gets us the image
 
+    timestamp = datetime.now().strftime("%Y_%m_%d-%I_%M_%S_%p")
+
+    isResumingSession = (sessionId != None)
+    if(not isResumingSession):
+        sessionId = str(int(time.time()))
+        os.makedirs("./session_"+sessionId+"/")
+    else:
+        if not os.path.exists("./session_"+sessionId):
+            print("Error: cannot find session folder for session id: "+sessionId)
+            print("try restarting without providing a session id or placing the session"\
+                " folder in the same directory as this script.")
+            return
+
+    sessionFolderpath = "./session_"+sessionId+"/"
+    configFilename = sessionFolderpath+"config_"+sessionId+".json"
+    historyFilename = sessionFolderpath+"history_"+sessionId+".json"
+    weightsFilename = sessionFolderpath+"weights_"+sessionId+".json"   
+
+    if(isResumingSession):    
+        config = openTrainingConfig(configFilename)
+    else:
+        config = {
+            'batch_size': 10
+        ,   'gamma': 0.99
+        ,   'decay_rate': 0.99
+        ,   'num_hidden_layer_neurons': 200
+        ,   'input_dimensions': 80*80
+        ,   'learning_rate': 1e-4
+        ,   'training_datetime': timestamp
+        ,   'sesstion_id': sessionId
+        ,   'episode_number': 0
+        ,   'reward_sum': 0
+        ,   'running_reward': None
+        ,   'prev_processed_observations': None
+        }
+    
     # hyperparameters
-    episode_number = 0
-    batch_size = 10
-    gamma = 0.99 # discount factor for reward
-    decay_rate = 0.99
-    num_hidden_layer_neurons = 200
-    input_dimensions = 80 * 80
-    learning_rate = 1e-4
-    reward_sum = 0
-    running_reward = None
-    prev_processed_observations = None
+    episode_number = config['episode_number']
+    batch_size = config['batch_size']
+    gamma = config['gamma'] # discount factor for reward
+    decay_rate = config['decay_rate']
+    num_hidden_layer_neurons = config['num_hidden_layer_neurons']
+    input_dimensions = config['input_dimensions']
+    learning_rate = config['learning_rate']
+    reward_sum = config['learning_rate']
+    running_reward = config['running_reward']
+    prev_processed_observations = config['prev_processed_observations']
 
-    sessionTimestampID = datetime.now().strftime("%Y_%m_%d-%I_%M_%S_%p")
-
-    trainingConfig = {
-        'batch_size': batch_size
-    ,   'gamma': gamma
-    ,   'decay_rate': decay_rate
-    ,   'num_hidden_layer_neurons': num_hidden_layer_neurons
-    ,   'input_dimensions': input_dimensions
-    ,   'learning_rate': learning_rate
-    ,   'training_datetime': sessionTimestampID
-    }
-    saveTrainingConfig(trainingConfig, sessionTimestampID)
-    historyFilename = "history_"+sessionTimestampID+".json"
-    weightsFilename = "weights_"+sessionTimestampID+".json"
+    saveTrainingConfig(config,configFilename)
     defaultWeights = {
         '1': np.random.randn(num_hidden_layer_neurons, input_dimensions) / np.sqrt(input_dimensions),
         '2': np.random.randn(num_hidden_layer_neurons) / np.sqrt(num_hidden_layer_neurons)
     }
     weights = openOrCreateWeights(defaultWeights,weightsFilename)
-    
 
     # To be used with rmsprop algorithm 
     expectation_g_squared = {}
@@ -254,8 +296,15 @@ def main(silent=False):
             observation = env.reset() # reset env
             running_reward = reward_sum if running_reward is None else running_reward * 0.99 + reward_sum * 0.01
             print('resetting env. episode reward total was %f. running mean: %f' % (reward_sum, running_reward))
-            saveEpisodeHistory({'episode_number': episode_number,'reward_sum': reward_sum, 'running_reward': running_reward}, historyFilename)
+            episodeData = {'episode_number': episode_number,'reward_sum': reward_sum, 'running_reward': running_reward}
+            saveEpisodeHistory(episodeData,historyFilename)
             saveWeights(weights,weightsFilename)
+            config['episode_number'] = episode_number
+            config['reward_sum'] = reward_sum
+            config['running_reward'] = running_reward
+            config['prev_processed_observations'] = prev_processed_observations
+            saveTrainingConfig(config,configFilename)
+
             reward_sum = 0
             prev_processed_observations = None
            
