@@ -139,8 +139,15 @@ def saveWeights(weights):
     jsonFile.close()
     return True
 
+def saveEpisodeHistory(episodeData):
+    JSONSerialized = json.dumps(episodeData, cls=NumpyArrayEncoder)
+    jsonFile = open('episodeHistory.json','a')
+    jsonFile.write(JSONSerialized+"\n")
+    jsonFile.close()
+    return True
+
 #################### The game  ##########################
-def main():
+def main(silent=False):
     env = gym.make("Pong-v0")
     observation = env.reset() # This gets us the image
 
@@ -173,8 +180,10 @@ def main():
 
 
     while True:
-        # env.render(mode='rgb_array')
-        env.render()
+        if(silent):
+            env.render(mode='rgb_array')
+        else:
+            env.render()
         processed_observations, prev_processed_observations = preprocess_observations(observation, prev_processed_observations, input_dimensions)
         hidden_layer_values, up_probability = neural_net(processed_observations, weights)
     
@@ -225,6 +234,7 @@ def main():
             observation = env.reset() # reset env
             running_reward = reward_sum if running_reward is None else running_reward * 0.99 + reward_sum * 0.01
             print('resetting env. episode reward total was %f. running mean: %f' % (reward_sum, running_reward))
+            saveEpisodeHistory({'episode_number': episode_number,'reward_sum': reward_sum, 'running_reward': running_reward})
             reward_sum = 0
             prev_processed_observations = None
             saveWeights(weights)
