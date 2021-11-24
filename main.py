@@ -4,6 +4,7 @@ import os
 import numpy as np
 from json import JSONEncoder
 import json
+from datetime import datetime
 
 ################ Image Preprocessing  ###################
 
@@ -116,32 +117,36 @@ class NumpyArrayEncoder(JSONEncoder):
             return obj.tolist()
         return JSONEncoder.default(self, obj)
 
-def openOrCreateWeights(num_hidden_layer_neurons, input_dimensions):
-    weights = {
-        '1': np.random.randn(num_hidden_layer_neurons, input_dimensions) / np.sqrt(input_dimensions),
-        '2': np.random.randn(num_hidden_layer_neurons) / np.sqrt(num_hidden_layer_neurons)
-    }
+def openOrCreateWeights(defaultWeights, filename):
+    weights = defaultWeights
     try:
-        jsonFile = open('weights.json', 'r')
+        jsonFile = open(filename, 'r')
         weightsJSONSerialized = jsonFile.read()
         weights = json.loads(weightsJSONSerialized)
         weights['1'] = np.asarray(weights['1'])
         weights['2'] = np.asarray(weights['2'])
     except:
-        saveWeights(weights)
+        saveWeights(weights, filename)
     
     return weights
        
-def saveWeights(weights):
+def saveWeights(weights, filename):
     weightsJSONSerialized = json.dumps(weights, cls=NumpyArrayEncoder)
-    jsonFile = open('weights.json','w')
+    jsonFile = open(filename,'w')
     jsonFile.write(weightsJSONSerialized)
     jsonFile.close()
     return True
 
-def saveEpisodeHistory(episodeData):
+def saveEpisodeHistory(episodeData, filename):
     JSONSerialized = json.dumps(episodeData, cls=NumpyArrayEncoder)
-    jsonFile = open('episodeHistory.json','a')
+    jsonFile = open(filename,'a')
+    jsonFile.write(JSONSerialized+"\n")
+    jsonFile.close()
+    return True
+
+def saveTrainingConfig(config,timestamp):
+    JSONSerialized = json.dumps(config, cls=NumpyArrayEncoder)
+    jsonFile = open("trainingConfig_"+timestamp+".json",'a')
     jsonFile.write(JSONSerialized+"\n")
     jsonFile.close()
     return True
@@ -163,11 +168,26 @@ def main(silent=False):
     running_reward = None
     prev_processed_observations = None
 
-    weights = openOrCreateWeights(num_hidden_layer_neurons,input_dimensions)
-    # weights = {
-    #     '1': np.random.randn(num_hidden_layer_neurons, input_dimensions) / np.sqrt(input_dimensions),
-    #     '2': np.random.randn(num_hidden_layer_neurons) / np.sqrt(num_hidden_layer_neurons)
-    # }
+    sessionTimestampID = datetime.now().strftime("%Y_%m_%d-%I_%M_%S_%p")
+
+    trainingConfig = {
+        'batch_size': batch_size
+    ,   'gamma': gamma
+    ,   'decay_rate': decay_rate
+    ,   'num_hidden_layer_neurons': num_hidden_layer_neurons
+    ,   'input_dimensions': input_dimensions
+    ,   'learning_rate': learning_rate
+    ,   'training_datetime': sessionTimestampID
+    }
+    saveTrainingConfig(trainingConfig, sessionTimestampID)
+    historyFilename = "history_"+sessionTimestampID+".json"
+    weightsFilename = "weights_"+sessionTimestampID+".json"
+    defaultWeights = {
+        '1': np.random.randn(num_hidden_layer_neurons, input_dimensions) / np.sqrt(input_dimensions),
+        '2': np.random.randn(num_hidden_layer_neurons) / np.sqrt(num_hidden_layer_neurons)
+    }
+    weights = openOrCreateWeights(defaultWeights,weightsFilename)
+    
 
     # To be used with rmsprop algorithm 
     expectation_g_squared = {}
@@ -234,10 +254,11 @@ def main(silent=False):
             observation = env.reset() # reset env
             running_reward = reward_sum if running_reward is None else running_reward * 0.99 + reward_sum * 0.01
             print('resetting env. episode reward total was %f. running mean: %f' % (reward_sum, running_reward))
-            saveEpisodeHistory({'episode_number': episode_number,'reward_sum': reward_sum, 'running_reward': running_reward})
+            saveEpisodeHistory({'episode_number': episode_number,'reward_sum': reward_sum, 'running_reward': running_reward}, historyFilename)
+            saveWeights(weights,weightsFilename)
             reward_sum = 0
             prev_processed_observations = None
-            saveWeights(weights)
+           
 
 
 if __name__ == '__main__':
