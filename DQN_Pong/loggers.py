@@ -74,3 +74,7 @@ def saveDictionaryToCSV(dictData,filenameAndPath):
         file.close()
     except IOError:
         print("I/O error")
+
+def saveModelJsonSummary(modelJSON, summaryFilenameAndPath):
+    with open(summaryFilenameAndPath, "w") as json_file:
+        json_file.write(modelJSON)

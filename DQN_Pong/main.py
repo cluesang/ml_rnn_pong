@@ -4,7 +4,10 @@ import matplotlib.pyplot as plt
 import time
 from collections import deque
 import numpy as np
-from loggers import saveDictionaryToCSV, openTrainingConfig, saveTrainingConfig
+from loggers import saveDictionaryToCSV\
+                    , openTrainingConfig\
+                    , saveTrainingConfig\
+                    , saveModelJsonSummary
 from datetime import datetime
 from tensorflow.keras.models import load_model
 import os
@@ -18,6 +21,7 @@ def train(silent=False,sessionId=None):
     if(not isResumingSession):
         sessionId = str(int(time.time()))
         os.makedirs("./session_"+sessionId+"/")
+
     else:
         if not os.path.exists("./session_"+sessionId):
             print("Error: cannot find session folder for session id: "+sessionId)
@@ -29,6 +33,7 @@ def train(silent=False,sessionId=None):
     configFilename = sessionFolderpath+"config_"+sessionId+".json"
     historyFilename = sessionFolderpath+"history_"+sessionId+".json"
     modelFilename = sessionFolderpath+"model_"+sessionId
+    modelSummaryFilename = sessionFolderpath+"model_"+sessionId+".json"
     videoFolderPath = sessionFolderpath+"videos_"+sessionId+"/"
 
     saved_model = None
@@ -44,10 +49,12 @@ def train(silent=False,sessionId=None):
         ,   'starting_epsilon': 1
         ,   'learn_rate': 0.00025
         ,   'episode_number': 0
-        ,   'debug': not silent # set true to see game monitor
+        ,   'debug': True # set true to see game monitor
         ,   'datetime': timestamp
         ,   'sessionId': sessionId
         }
+    
+    config['debug'] = not silent # use the setting supplied when calling the function.
 
     agent = the_agent.Agent(config['possible_actions']\
                             ,config['starting_mem_len']\
@@ -58,6 +65,11 @@ def train(silent=False,sessionId=None):
                             ,resume_model=saved_model)
     
     env = environment.make_env(config['name'],agent)
+
+    # if first run of this model/session
+    # then dump model summary and 
+    if(not isResumingSession):
+        saveModelJsonSummary(agent.model.to_json(),modelSummaryFilename)
 
     last_100_avg = [-21]
     scores = deque(maxlen = 100)
@@ -103,13 +115,13 @@ def train(silent=False,sessionId=None):
         config['episode_number'] = str(i)
         saveTrainingConfig(config,configFilename) # saveConfig
 
-        if i%5==0:
+        if i%1000==0:
             recordEpisode = True
         i += 1
 
 if __name__ == '__main__':
     try:
-        train(silent=False,sessionId="1637802637")
+        train(silent=True,sessionId="1637807385")
         # train(silent=False)
     except KeyboardInterrupt:
         print('Interrupted')
