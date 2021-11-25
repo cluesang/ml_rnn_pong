@@ -29,6 +29,7 @@ def train(silent=False,sessionId=None):
     configFilename = sessionFolderpath+"config_"+sessionId+".json"
     historyFilename = sessionFolderpath+"history_"+sessionId+".json"
     modelFilename = sessionFolderpath+"model_"+sessionId
+    videoFolderPath = sessionFolderpath+"videos_"+sessionId+"/"
 
     saved_model = None
     if(isResumingSession):    
@@ -70,10 +71,18 @@ def train(silent=False,sessionId=None):
 
     env.reset()
     i = int(config['episode_number'])
+    recordEpisode = False
     while True:
         timesteps = agent.total_timesteps
         time_elapsed = time.time()
-        score = environment.play_episode(config['name'], env, agent, config['debug']) #set debug to true for rendering
+        score = environment.play_episode(config['name']\
+                                        , env\
+                                        , agent\
+                                        , config['debug']\
+                                        , record=recordEpisode\
+                                        , recordPath=videoFolderPath+"/ep_"+str(i)
+                                        ) #set debug to true for rendering
+        recordEpisode = False # reset record flag
         scores.append(score)
         if score > max_score:
             max_score = score
@@ -94,10 +103,8 @@ def train(silent=False,sessionId=None):
         config['episode_number'] = str(i)
         saveTrainingConfig(config,configFilename) # saveConfig
 
-        if i%100==0 and i!=0:
-            last_100_avg.append(sum(scores)/len(scores))
-            plt.plot(np.arange(0,i+1,100),last_100_avg)
-            plt.show()
+        if i%5==0:
+            recordEpisode = True
         i += 1
 
 if __name__ == '__main__':

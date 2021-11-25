@@ -57,7 +57,9 @@ def take_step(name, env, agent, score, debug):
 
     return (score + next_frames_reward),False
 
-def play_episode(name, env, agent, debug = False):
+def play_episode(name, env, agent, debug = False, record=False, recordPath="./"):
+    if record:
+        env = gym.wrappers.Monitor(env,recordPath,force=True)
     initialize_new_game(name, env, agent)
     done = False
     score = 0
