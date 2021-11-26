@@ -33,6 +33,7 @@ def train(silent=False,sessionId=None):
     configFilename = sessionFolderpath+"config_"+sessionId+".json"
     historyFilename = sessionFolderpath+"history_"+sessionId+".json"
     modelFilename = sessionFolderpath+"model_"+sessionId
+    weightsFilename = sessionFolderpath+"weights_"+sessionId+".hd5"
     modelSummaryFilename = sessionFolderpath+"model_"+sessionId+".json"
     videoFolderPath = sessionFolderpath+"videos_"+sessionId+"/"
 
@@ -75,12 +76,6 @@ def train(silent=False,sessionId=None):
     scores = deque(maxlen = 100)
     max_score = -21
 
-    """ If testing:
-    agent.model.load_weights('recent_weights.hdf5')
-    agent.model_target.load_weights('recent_weights.hdf5')
-    agent.epsilon = 0.0
-    """
-
     env.reset()
     i = int(config['episode_number'])
     recordEpisode = False
@@ -92,7 +87,8 @@ def train(silent=False,sessionId=None):
                                         , agent\
                                         , config['debug']\
                                         , record=recordEpisode\
-                                        , recordPath=videoFolderPath+"/ep_"+str(i)
+                                        , recordPath=videoFolderPath+"/ep_"+str(i)\
+                                        , weightsSavePath=weightsFilename\
                                         ) #set debug to true for rendering
         recordEpisode = False # reset record flag
         scores.append(score)
@@ -100,7 +96,8 @@ def train(silent=False,sessionId=None):
             max_score = score
 
         episodeData = {
-            'episode_number': str(i)
+            'sessionId': sessionId
+        ,   'episode_number': str(i)
         ,   'steps': str(agent.total_timesteps - timesteps)
         ,   'duration': str(time.time() - time_elapsed)
         ,   'score': str(score)
@@ -115,13 +112,15 @@ def train(silent=False,sessionId=None):
         config['episode_number'] = str(i)
         saveTrainingConfig(config,configFilename) # saveConfig
 
-        if i%1000==0:
+        if i%100==0:
             recordEpisode = True
         i += 1
 
 if __name__ == '__main__':
     try:
-        train(silent=True,sessionId="1637807385")
+        # train(silent=True,sessionId="1637807740")
+        # train(silent=True,sessionId="1637807385")
+        # train(silent=True,sessionId="1637816068")
         # train(silent=False)
     except KeyboardInterrupt:
         print('Interrupted')
