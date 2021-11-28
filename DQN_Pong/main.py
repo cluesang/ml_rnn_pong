@@ -12,6 +12,8 @@ from datetime import datetime
 from tensorflow.keras.models import load_model
 import os
 import sys
+import threading
+import logging
 
 def train(silent=False,sessionId=None):
     # had to install tensorflow 'pip install tensorflow'
@@ -31,7 +33,7 @@ def train(silent=False,sessionId=None):
 
     sessionFolderpath = "./session_"+sessionId+"/"
     configFilename = sessionFolderpath+"config_"+sessionId+".json"
-    historyFilename = sessionFolderpath+"history_"+sessionId+".json"
+    historyFilename = sessionFolderpath+"history_"+sessionId+".csv"
     modelFilename = sessionFolderpath+"model_"+sessionId
     weightsFilename = sessionFolderpath+"weights_"+sessionId+".hd5"
     modelSummaryFilename = sessionFolderpath+"model_"+sessionId+".json"
@@ -118,10 +120,13 @@ def train(silent=False,sessionId=None):
 
 if __name__ == '__main__':
     try:
+        format = "%(asctime)s: %(message)s"
+        # logging.basicConfig(format=format, level=logging.INFO,
+        #                     datefmt="%H:%M:%S")
         # train(silent=True,sessionId="1637807740")
         # train(silent=True,sessionId="1637807385")
         # train(silent=True,sessionId="1637816068")
-        # train(silent=False)
+        train(silent=False)
     except KeyboardInterrupt:
         print('Interrupted')
         try:
