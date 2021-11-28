@@ -2,6 +2,10 @@ import gym
 import sys
 import os
 import numpy as np
+from json import JSONEncoder
+import json
+from datetime import datetime
+import time
 import csv
 
 ################ Image Preprocessing  ###################
@@ -109,54 +113,123 @@ def discount_plus_rewards(gradient_log_p, episode_rewards, gamma):
     discounted_episode_rewards /= np.std(discounted_episode_rewards)
     return gradient_log_p * discounted_episode_rewards
 
-def openOrCreateWeights(num_hidden_layer_neurons, input_dimensions):
-    weights = {
-        '1': np.random.randn(num_hidden_layer_neurons, input_dimensions) / np.sqrt(input_dimensions),
-        '2': np.random.randn(num_hidden_layer_neurons) / np.sqrt(num_hidden_layer_neurons)
-    }
+class NumpyArrayEncoder(JSONEncoder):
+    def default(self, obj):
+        if isinstance(obj, np.ndarray):
+            return obj.tolist()
+        return JSONEncoder.default(self, obj)
+
+def openOrCreateWeights(defaultWeights, filename):
+    weights = defaultWeights
     try:
-        with open('weights.csv','w', newline='') as csvfile:
-            reader = csv.DictReader(csvfile,fieldnames=['1', '2'])
-            for row in reader:
-                weights['1'] = row['1']
-                weights['2'] = row['2']
-                print(row['1'], row['2'])
+        jsonFile = open(filename, 'r')
+        weightsJSONSerialized = jsonFile.read()
+        weights = json.loads(weightsJSONSerialized)
+        weights['1'] = np.asarray(weights['1'])
+        weights['2'] = np.asarray(weights['2'])
     except:
-        saveWeights(weights)
+        saveWeights(weights, filename)
     
     return weights
        
-def saveWeights(weights):
-    with open('weights.csv','w', newline='') as csvfile:
-        fieldnames = ['1', '2']
-        writer = csv.DictWriter(csvfile, fieldnames=fieldnames)
-
-        writer.writeheader()
-        writer.writerow(weights)
+def saveWeights(weights, filename):
+    weightsJSONSerialized = json.dumps(weights, cls=NumpyArrayEncoder)
+    jsonFile = open(filename,'w')
+    jsonFile.write(weightsJSONSerialized)
+    jsonFile.close()
     return True
 
+def saveEpisodeHistory(episodeData, filename):
+
+    headers = ['episode_number', 'reward_sum', 'running_reward']
+    entryData = [episodeData['episode_number']
+                ,episodeData['reward_sum']
+                ,episodeData['running_reward']]
+    firstRun = False
+    if (not os.path.exists(filename)):
+            firstRun = True
+    file = open(filename, 'a')
+    writer = csv.writer(file)
+    if (firstRun):
+        writer.writerow(headers)
+    writer.writerow(entryData)
+    file.close()
+    return True
+
+def saveTrainingConfig(config,filename):
+    JSONSerialized = json.dumps(config, cls=NumpyArrayEncoder)
+    jsonFile = open(filename,'w')
+    jsonFile.write(JSONSerialized+"\n")
+    jsonFile.close()
+    return True
+
+def openTrainingConfig(filename):
+    jsonFile = open(filename, 'r')
+    configJSONSerialized = jsonFile.read()
+    config = json.loads(configJSONSerialized)
+    jsonFile.close()
+    config['prev_processed_observations'] = np.asarray(config['prev_processed_observations'])
+    return config
+
 #################### The game  ##########################
-def main():
+def main(silent=False,sessionId=None):
     env = gym.make("Pong-v0")
     observation = env.reset() # This gets us the image
 
-    # hyperparameters
-    episode_number = 0
-    batch_size = 10
-    gamma = 0.99 # discount factor for reward
-    decay_rate = 0.99
-    num_hidden_layer_neurons = 200
-    input_dimensions = 80 * 80
-    learning_rate = 1e-4
-    reward_sum = 0
-    running_reward = None
-    prev_processed_observations = None
+    timestamp = datetime.now().strftime("%Y_%m_%d-%I_%M:%S:%p")
 
-    weights = openOrCreateWeights(num_hidden_layer_neurons,input_dimensions)
-    # weights = {
-    #     '1': np.random.randn(num_hidden_layer_neurons, input_dimensions) / np.sqrt(input_dimensions),
-    #     '2': np.random.randn(num_hidden_layer_neurons) / np.sqrt(num_hidden_layer_neurons)
-    # }
+    isResumingSession = (sessionId != None)
+    if(not isResumingSession):
+        sessionId = str(int(time.time()))
+        os.makedirs("./session_"+sessionId+"/")
+    else:
+        if not os.path.exists("./session_"+sessionId):
+            print("Error: cannot find session folder for session id: "+sessionId)
+            print("try restarting without providing a session id or placing the session"\
+                " folder in the same directory as this script.")
+            return
+
+    sessionFolderpath = "./session_"+sessionId+"/"
+    configFilename = sessionFolderpath+"config_"+sessionId+".json"
+    historyFilename = sessionFolderpath+"history_"+sessionId+".json"
+    weightsFilename = sessionFolderpath+"weights_"+sessionId+".json"   
+
+    if(isResumingSession):    
+        config = openTrainingConfig(configFilename)
+    else:
+        config = {
+            'batch_size': 10
+        ,   'gamma': 0.99
+        ,   'decay_rate': 0.99
+        ,   'num_hidden_layer_neurons': 200
+        ,   'input_dimensions': 80*80
+        ,   'learning_rate': 1e-4
+        ,   'training_datetime': timestamp
+        ,   'sesstion_id': sessionId
+        ,   'episode_number': 0
+        ,   'reward_sum': 0
+        ,   'running_reward': None
+        ,   'prev_processed_observations': None
+        }
+    
+    # hyperparameters
+    episode_number = config['episode_number']
+    batch_size = config['batch_size']
+    gamma = config['gamma'] # discount factor for reward
+    decay_rate = config['decay_rate']
+    num_hidden_layer_neurons = config['num_hidden_layer_neurons']
+    input_dimensions = config['input_dimensions']
+    learning_rate = config['learning_rate']
+    reward_sum = config['learning_rate']
+    running_reward = config['running_reward']
+    prev_processed_observations = config['prev_processed_observations']
+
+    saveTrainingConfig(config,configFilename)
+    defaultWeights = {
+        '1': np.random.randn(num_hidden_layer_neurons, input_dimensions) / np.sqrt(input_dimensions),
+        '2': np.random.randn(num_hidden_layer_neurons) / np.sqrt(num_hidden_layer_neurons)
+    }
+    weights = openOrCreateWeights(defaultWeights,weightsFilename)
 
     # To be used with rmsprop algorithm 
     expectation_g_squared = {}
@@ -169,7 +242,10 @@ def main():
 
 
     while True:
-        env.render(mode='rgb_array')
+        if(silent):
+            env.render(mode='rgb_array')
+        else:
+            env.render()
         processed_observations, prev_processed_observations = preprocess_observations(observation, prev_processed_observations, input_dimensions)
         hidden_layer_values, up_probability = neural_net(processed_observations, weights)
     
@@ -220,9 +296,18 @@ def main():
             observation = env.reset() # reset env
             running_reward = reward_sum if running_reward is None else running_reward * 0.99 + reward_sum * 0.01
             print('resetting env. episode reward total was %f. running mean: %f' % (reward_sum, running_reward))
+            episodeData = {'episode_number': episode_number,'reward_sum': reward_sum, 'running_reward': running_reward}
+            saveEpisodeHistory(episodeData,historyFilename)
+            saveWeights(weights,weightsFilename)
+            config['episode_number'] = episode_number
+            config['reward_sum'] = reward_sum
+            config['running_reward'] = running_reward
+            config['prev_processed_observations'] = prev_processed_observations
+            saveTrainingConfig(config,configFilename)
+
             reward_sum = 0
             prev_processed_observations = None
-            saveWeights(weights)
+           
 
 
 if __name__ == '__main__':
